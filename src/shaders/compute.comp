@@ -21,36 +21,174 @@ struct Blade {
     vec4 up;
 };
 
-// TODO: Add bindings to:
-// 1. Store the input blades
-// 2. Write out the culled blades
-// 3. Write the total number of blades remaining
+// Input blades
+layout(set = 2, binding = 0) buffer Blades {
+    Blade blades[];
+};
 
-// The project is using vkCmdDrawIndirect to use a buffer as the arguments for a draw call
-// This is sort of an advanced feature so we've showed you what this buffer should look like
-//
-// layout(set = ???, binding = ???) buffer NumBlades {
-// 	  uint vertexCount;   // Write the number of blades remaining here
-// 	  uint instanceCount; // = 1
-// 	  uint firstVertex;   // = 0
-// 	  uint firstInstance; // = 0
-// } numBlades;
+// Output culled blades
+layout(set = 2, binding = 1) buffer CulledBlades {
+    Blade culledBlades[];
+};
+
+// Indirect draw parameters
+layout(set = 2, binding = 2) buffer NumBlades {
+    uint vertexCount;
+    uint instanceCount;
+    uint firstVertex;
+    uint firstInstance;
+} numBlades;
 
 bool inBounds(float value, float bounds) {
     return (value >= -bounds) && (value <= bounds);
 }
 
 void main() {
-	// Reset the number of blades to 0
-	if (gl_GlobalInvocationID.x == 0) {
-		// numBlades.vertexCount = 0;
-	}
-	barrier(); // Wait till all threads reach this point
+    // Reset the number of blades to 0
+    if (gl_GlobalInvocationID.x == 0) {
+        numBlades.vertexCount = 0;
+    }
+    barrier(); // Wait till all threads reach this point
 
-    // TODO: Apply forces on every blade and update the vertices in the buffer
+    uint index = gl_GlobalInvocationID.x;
+    
+    // Bounds check
+    if (index >= blades.length()) {
+        return;
+    }
 
-	// TODO: Cull blades that are too far away or not in the camera frustum and write them
-	// to the culled blades buffer
-	// Note: to do this, you will need to use an atomic operation to read and update numBlades.vertexCount
-	// You want to write the visible blades to the buffer without write conflicts between threads
+    Blade blade = blades[index];
+    
+    // Extract blade properties
+    vec3 v0 = blade.v0.xyz;
+    vec3 v1 = blade.v1.xyz;
+    vec3 v2 = blade.v2.xyz;
+    vec3 up = blade.up.xyz;
+    
+    float orientation = blade.v0.w;
+    float height = blade.v1.w;
+    float width = blade.v2.w;
+    float stiffness = blade.up.w;
+
+    // === FORCES ===
+    
+    // Gravity
+    vec3 gE = normalize(vec3(0.0, -1.0, 0.0)) * 9.8;
+    
+    // Front facing direction
+    vec3 front = normalize(cross(up, vec3(sin(orientation), 0.0, cos(orientation))));
+    
+    // Front gravity
+    vec3 gF = 0.25 * length(gE) * front;
+    
+    // Total gravity
+    vec3 g = gE + gF;
+    
+    // Recovery
+    vec3 iv2 = v0 + up * height;
+    vec3 r = (iv2 - v2) * stiffness;
+    
+    // Wind
+    // Simple wind that varies with position and time
+    float windStrength = 5.0;
+    vec3 windDirection = normalize(vec3(1.0, 0.0, 0.5));
+    float windFreq = sin(totalTime * 0.5 + v0.x * 0.1) * cos(totalTime * 0.3 + v0.z * 0.1);
+    vec3 windForce = windDirection * windStrength * (0.5 + 0.5 * windFreq);
+    
+    // Wind alignment
+    float theta = dot(windDirection, normalize(v2 - v0));
+    float fd = 1.0 - abs(theta);
+    vec3 w = windForce * fd;
+    
+    // Total force
+    vec3 tv2 = (g + r + w) * deltaTime;
+    
+    // Update v2
+    vec3 v2_new = v2 + tv2;
+    
+    // === STATE VALIDATION ===
+    
+    // Make sure v2 doesn't go below ground
+    v2_new = v2_new - up * min(dot(up, v2_new - v0), 0.0);
+    
+    // Maintain blade length
+    float lproj = length(v2_new - v0 - up * dot(v2_new - v0, up));
+    v2_new = v0 + up * height + normalize(v2_new - v0 - up * dot(v2_new - v0, up)) * min(lproj, height);
+    
+    // Update v1 (Bezier point)
+    float lproj_v1 = length(v2_new - v0 - up * dot(v2_new - v0, up));
+    vec3 v1_new = v0 + height * up * 0.5 + (v2_new - v0 - height * up) * 0.5;
+    
+    // Update blade
+    blade.v1.xyz = v1_new;
+    blade.v2.xyz = v2_new;
+    
+    // === CULLING ===
+    
+    bool visible = true;
+    
+    // 1. Orientation culling
+    vec3 camDir = (inverse(camera.view) * vec4(0.0, 0.0, 1.0, 0.0)).xyz;
+    camDir = normalize(camDir);
+    
+    if (abs(dot(normalize(v2_new - v0), camDir)) > 0.9) {
+        visible = false;
+    }
+    
+    // 2. View-frustum culling
+    if (visible) {
+        vec3 m = 0.25 * v0 + 0.5 * v1_new + 0.25 * v2_new;
+        
+        vec4 v0_clip = camera.proj * camera.view * vec4(v0, 1.0);
+        vec4 v2_clip = camera.proj * camera.view * vec4(v2_new, 1.0);
+        vec4 m_clip = camera.proj * camera.view * vec4(m, 1.0);
+        
+        // Perspective divide
+        v0_clip /= v0_clip.w;
+        v2_clip /= v2_clip.w;
+        m_clip /= m_clip.w;
+        
+        float tolerance = 1.0;
+        
+        bool v0_visible = inBounds(v0_clip.x, tolerance) && inBounds(v0_clip.y, tolerance) && inBounds(v0_clip.z, 1.0);
+        bool v2_visible = inBounds(v2_clip.x, tolerance) && inBounds(v2_clip.y, tolerance) && inBounds(v2_clip.z, 1.0);
+        bool m_visible = inBounds(m_clip.x, tolerance) && inBounds(m_clip.y, tolerance) && inBounds(m_clip.z, 1.0);
+        
+        if (!v0_visible && !v2_visible && !m_visible) {
+            visible = false;
+        }
+    }
+    
+    // 3. Distance culling
+    if (visible) {
+        vec3 camPos = (inverse(camera.view) * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        float distance = length(v0 - camPos);
+        float maxDistance = 50.0;
+        
+        // Simple distance-based culling with buckets
+        int numBuckets = 10;
+        float bucketSize = maxDistance / float(numBuckets);
+        int bucketIndex = int(distance / bucketSize);
+        
+        // Cull more blades in farther buckets
+        if (bucketIndex > 0) {
+            float cullProbability = float(bucketIndex) / float(numBuckets);
+            float hash = fract(sin(dot(v0.xz, vec2(12.9898, 78.233))) * 43758.5453);
+            
+            if (hash < cullProbability) {
+                visible = false;
+            }
+        }
+        
+        if (distance > maxDistance) {
+            visible = false;
+        }
+    }
+    
+    // Write visible blade to output
+    if (visible) {
+        blades[index] = blade;
+        uint idx = atomicAdd(numBlades.vertexCount, 1);
+        culledBlades[idx] = blade;
+    }
 }
