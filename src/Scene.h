@@ -9,8 +9,8 @@
 using namespace std::chrono;
 
 struct Time {
-    float deltaTime = 0.0f;
-    float totalTime = 0.0f;
+    glm::vec4 timeData = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f); // x=deltaTime, y=totalTime, z/w unused
+    glm::vec4 spherePosition = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 };
 
 class Scene {
@@ -42,4 +42,6 @@ public:
     VkBuffer GetTimeBuffer() const;
 
     void UpdateTime();
+    glm::vec4 GetSpherePosition() const;  
+    void SetSpherePosition(const glm::vec3& pos);
 };

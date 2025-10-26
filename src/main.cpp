@@ -10,6 +10,7 @@ Device* device;
 SwapChain* swapChain;
 Renderer* renderer;
 Camera* camera;
+Scene* scene;
 
 namespace {
     void resizeCallback(GLFWwindow* window, int width, int height) {
@@ -62,6 +63,23 @@ namespace {
 
             previousY = yPosition;
         }
+    }
+}
+
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        float speed = 0.5f;
+        glm::vec3 currentPos = glm::vec3(scene->GetSpherePosition());
+
+        if (key == GLFW_KEY_W) currentPos.z -= speed;
+        if (key == GLFW_KEY_S) currentPos.z += speed;
+        if (key == GLFW_KEY_A) currentPos.x -= speed;
+        if (key == GLFW_KEY_D) currentPos.x += speed;
+        if (key == GLFW_KEY_Q) currentPos.y -= speed;
+        if (key == GLFW_KEY_E) currentPos.y += speed;
+
+        scene->SetSpherePosition(currentPos);
+        //printf("Sphere at: %.2f, %.2f, %.2f\n", currentPos.x, currentPos.y, currentPos.z);
     }
 }
 
@@ -133,7 +151,7 @@ int main() {
 
     vkDestroyCommandPool(device->GetVkDevice(), transferCommandPool, nullptr);
 
-    Scene* scene = new Scene(device);
+    scene = new Scene(device);
     scene->AddModel(plane);
     scene->AddBlades(blades);
 
@@ -142,6 +160,7 @@ int main() {
     glfwSetWindowSizeCallback(GetGLFWWindow(), resizeCallback);
     glfwSetMouseButtonCallback(GetGLFWWindow(), mouseDownCallback);
     glfwSetCursorPosCallback(GetGLFWWindow(), mouseMoveCallback);
+    glfwSetKeyCallback(GetGLFWWindow(), keyCallback);
 
     while (!ShouldQuit()) {
         glfwPollEvents();

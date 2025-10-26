@@ -10,8 +10,10 @@ layout(set = 0, binding = 0) uniform CameraBufferObject {
 } camera;
 
 layout(set = 1, binding = 0) uniform Time {
-    float deltaTime;
-    float totalTime;
+    //float deltaTime;
+    //float totalTime;
+    vec4 timeData; 
+    vec4 spherePosition;
 };
 
 struct Blade {
@@ -92,7 +94,8 @@ void main() {
     // Simple wind that varies with position and time
     float windStrength = 5.0;
     vec3 windDirection = normalize(vec3(1.0, 0.0, 0.5));
-    float windFreq = sin(totalTime * 0.5 + v0.x * 0.1) * cos(totalTime * 0.3 + v0.z * 0.1);
+    //float windFreq = sin(totalTime * 0.5 + v0.x * 0.1) * cos(totalTime * 0.3 + v0.z * 0.1);
+    float windFreq = sin(timeData.y * 0.5 + v0.x * 0.1) * cos(timeData.y * 0.3 + v0.z * 0.1);
     vec3 windForce = windDirection * windStrength * (0.5 + 0.5 * windFreq);
     
     // Wind alignment
@@ -100,9 +103,33 @@ void main() {
     float fd = 1.0 - abs(theta);
     vec3 w = windForce * fd;
     
-    // Total force
-    vec3 tv2 = (g + r + w) * deltaTime;
+    // === SPHERE INTERACTION ===
+    vec3 sphereRepulsion = vec3(0.0);
+    vec3 sphereCenter = spherePosition.xyz;
+    float sphereRadius = spherePosition.w;
+
+    // Distance from blade base to sphere
+    float distToSphere = length(v0 - sphereCenter);
+
+    // If blade is within interaction range
+    float interactionRadius = sphereRadius + 3.0;
+    if (distToSphere < interactionRadius) {
+        // Direction away from sphere
+        vec3 repulsionDir = normalize(v0 - sphereCenter);
     
+        // Strength decreases with distance
+        float strength = 1.0 - (distToSphere / interactionRadius);
+        strength = strength * strength; // Quadratic falloff
+    
+        // Apply repulsion force
+        sphereRepulsion = repulsionDir * 15.0 * strength;
+    }
+
+
+    // Total force
+    //vec3 tv2 = (g + r + w + sphereRepulsion) * deltaTime;
+    vec3 tv2 = (g + r + w + sphereRepulsion) * timeData.x;
+
     // Update v2
     vec3 v2_new = v2 + tv2;
     

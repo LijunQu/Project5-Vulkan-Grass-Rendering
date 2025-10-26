@@ -28,14 +28,25 @@ void Scene::UpdateTime() {
     duration<float> nextDeltaTime = duration_cast<duration<float>>(currentTime - startTime);
     startTime = currentTime;
 
-    time.deltaTime = nextDeltaTime.count();
-    time.totalTime += time.deltaTime;
+    //time.deltaTime = nextDeltaTime.count();
+    //time.totalTime += time.deltaTime;
+    time.timeData.x = nextDeltaTime.count();  // deltaTime
+    time.timeData.y += time.timeData.x;        // totalTime
 
     memcpy(mappedData, &time, sizeof(Time));
 }
 
 VkBuffer Scene::GetTimeBuffer() const {
     return timeBuffer;
+}
+
+glm::vec4 Scene::GetSpherePosition() const {
+    return time.spherePosition;
+}
+
+void Scene::SetSpherePosition(const glm::vec3& pos) {
+    time.spherePosition = glm::vec4(pos, time.spherePosition.w);
+    memcpy(mappedData, &time, sizeof(Time));
 }
 
 Scene::~Scene() {
