@@ -1,12 +1,19 @@
 Vulkan Grass Rendering
-==================================
+======================
 
-**University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 5**
+**University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 2**
 
-* (TODO) YOUR NAME HERE
-* Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+* Lijun Qu
+  * [LinkedIn](https://www.linkedin.com/in/lijun-qu-398375251/), [personal website](www.lijunqu.com), etc.
+* Tested on: Windows 11, i7-14700HX (2.10 GHz) 32GB, Nvidia GeForce RTX 4060 Laptop
 
-### (TODO: Your README)
+![](img/Result.gif)
 
-*DO NOT* leave the README to the last minute! It is a crucial part of the
-project, and we will not be able to grade you without a good README.
+---
+
+## Overview
+This project implements a **real-time grass simulator and renderer** using **Vulkan**, based on  
+[Responsive Real-Time Grass Rendering for General 3D Scenes](https://www.cg.tuwien.ac.at/research/publications/2017/JAHRMANN-2017-RRTG/JAHRMANN-2017-RRTG-draft.pdf).
+
+Each grass blade is modeled as a **Bezier curve**, simulated via compute shaders and rendered with tessellation for smooth curvature and dynamic level-of-detail.  
+I further implemented **interactive grass control (WASD)** and **LOD visualization** to enhance both realism and debuggability.

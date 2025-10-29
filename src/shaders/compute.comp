@@ -12,6 +12,7 @@ layout(set = 0, binding = 0) uniform CameraBufferObject {
 layout(set = 1, binding = 0) uniform Time {
     vec4 timeData; 
     vec4 spherePosition;
+    vec4 cullingFlags; // x=orientation, y=frustum, z=distance, w=unused
 };
 
 struct Blade {
@@ -119,24 +120,24 @@ void main() {
     vec2 windPos = v0.xz * 0.05;
     
     // Primary wind wave (faster now)
-    float wind1 = sin(time * 0.6 + windPos.x * 0.3) * cos(time * 0.5 + windPos.y * 0.2);  // Increased from 0.4, 0.3
+    float wind1 = sin(time * 0.6 + windPos.x * 0.3) * cos(time * 0.5 + windPos.y * 0.2);
     
     // Secondary wave (adds variation)
-    float wind2 = sin(time * 0.9 + windPos.x * 0.5 + windPos.y * 0.4) * 0.5;  // Increased from 0.6
+    float wind2 = sin(time * 0.9 + windPos.x * 0.5 + windPos.y * 0.4) * 0.5;
     
     // Add some noise for natural irregularity
-    float windNoise = snoise(windPos * 2.0 + vec2(time * 0.35, time * 0.25)) * 0.4;  // Increased from 0.2, 0.15 and 0.3
+    float windNoise = snoise(windPos * 2.0 + vec2(time * 0.35, time * 0.25)) * 0.4;
     
     // Combine for stronger wind
-    float windStrength = 7.0 + (wind1 + wind2 + windNoise) * 4.5;  // Increased from 5.0 and 3.0
+    float windStrength = 7.0 + (wind1 + wind2 + windNoise) * 4.5;
     
     // Faster changing wind direction
-    float windAngle = time * 0.25 + sin(time * 0.15) * 0.7;  // Increased from 0.15, 0.1, 0.5
+    float windAngle = time * 0.25 + sin(time * 0.15) * 0.7;
     vec3 windDirection = normalize(vec3(cos(windAngle), 0.0, sin(windAngle)));
     
     // More frequent gusts
-    float gustWave = sin(time * 0.4 + windPos.x * 0.2);  // Increased from 0.25
-    float gust = smoothstep(0.6, 1.0, gustWave) * 5.0;  // Lowered threshold from 0.7, increased strength from 3.0
+    float gustWave = sin(time * 0.4 + windPos.x * 0.2);
+    float gust = smoothstep(0.6, 1.0, gustWave) * 5.0;
     
     vec3 windForce = windDirection * (windStrength + gust);
     
@@ -190,57 +191,84 @@ void main() {
     bool visible = true;
     
     // 1. Orientation culling
-    vec3 camDir = (inverse(camera.view) * vec4(0.0, 0.0, 1.0, 0.0)).xyz;
-    camDir = normalize(camDir);
-    
-    if (abs(dot(normalize(v2_new - v0), camDir)) > 0.9) {
-        visible = false;
+    if (cullingFlags.x > 0.5) {
+        vec3 camPos = (inverse(camera.view) * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        vec3 viewDir = normalize(camPos - v0);
+        vec3 front = normalize(cross(up, vec3(sin(orientation), 0.0, cos(orientation))));
+        
+        // Cull if perpendicular (edge-on to camera)
+        if (abs(dot(front, viewDir)) < 0.1) {
+            visible = false;
+        }
     }
     
-    // 2. View-frustum culling
-    if (visible) {
+    // 2. View-frustum culling (MORE AGGRESSIVE)
+    if (visible && cullingFlags.y > 0.5) {
+        // Calculate approximate midpoint using Bezier curve weights
         vec3 m = 0.25 * v0 + 0.5 * v1_new + 0.25 * v2_new;
         
+        // Transform all three points to clip space
         vec4 v0_clip = camera.proj * camera.view * vec4(v0, 1.0);
         vec4 v2_clip = camera.proj * camera.view * vec4(v2_new, 1.0);
         vec4 m_clip = camera.proj * camera.view * vec4(m, 1.0);
         
-        v0_clip /= v0_clip.w;
-        v2_clip /= v2_clip.w;
-        m_clip /= m_clip.w;
+        // Perspective divide to get NDC coordinates
+        vec3 v0_ndc = v0_clip.xyz / v0_clip.w;
+        vec3 v2_ndc = v2_clip.xyz / v2_clip.w;
+        vec3 m_ndc = m_clip.xyz / m_clip.w;
         
-        float tolerance = 1.0;
+        // SMALLER tolerance = MORE AGGRESSIVE culling (easier to see)
+        float tolerance = 0.95;
         
-        bool v0_visible = inBounds(v0_clip.x, tolerance) && inBounds(v0_clip.y, tolerance) && inBounds(v0_clip.z, 1.0);
-        bool v2_visible = inBounds(v2_clip.x, tolerance) && inBounds(v2_clip.y, tolerance) && inBounds(v2_clip.z, 1.0);
-        bool m_visible = inBounds(m_clip.x, tolerance) && inBounds(m_clip.y, tolerance) && inBounds(m_clip.z, 1.0);
+        // Check if each point is inside the frustum
+        // In Vulkan NDC: x,y in [-1, 1] and z in [0, 1]
+        bool v0_visible = (v0_ndc.x >= -tolerance && v0_ndc.x <= tolerance) &&
+                          (v0_ndc.y >= -tolerance && v0_ndc.y <= tolerance) &&
+                          (v0_ndc.z >= 0.0 && v0_ndc.z <= 1.0);
         
+        bool v2_visible = (v2_ndc.x >= -tolerance && v2_ndc.x <= tolerance) &&
+                          (v2_ndc.y >= -tolerance && v2_ndc.y <= tolerance) &&
+                          (v2_ndc.z >= 0.0 && v2_ndc.z <= 1.0);
+        
+        bool m_visible = (m_ndc.x >= -tolerance && m_ndc.x <= tolerance) &&
+                         (m_ndc.y >= -tolerance && m_ndc.y <= tolerance) &&
+                         (m_ndc.z >= 0.0 && m_ndc.z <= 1.0);
+        
+        // Cull only if ALL three points are outside the frustum
         if (!v0_visible && !v2_visible && !m_visible) {
             visible = false;
         }
     }
     
-    // 3. Distance culling
-    if (visible) {
+// 3. Distance culling (MORE AGGRESSIVE)
+    if (visible && cullingFlags.z > 0.5) {
         vec3 camPos = (inverse(camera.view) * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         float distance = length(v0 - camPos);
-        float maxDistance = 50.0;
         
-        int numBuckets = 10;
-        float bucketSize = maxDistance / float(numBuckets);
-        int bucketIndex = int(distance / bucketSize);
+        // More aggressive max distance
+        float maxDistance = 30.0;  // Reduced from 50.0
         
-        if (bucketIndex > 0) {
-            float cullProbability = float(bucketIndex) / float(numBuckets);
-            float hashVal = fract(sin(dot(v0.xz, vec2(12.9898, 78.233))) * 43758.5453);
-            
-            if (hashVal < cullProbability) {
-                visible = false;
-            }
-        }
-        
+        // Immediate culling beyond max distance
         if (distance > maxDistance) {
             visible = false;
+        } else {
+            // Progressive culling based on distance buckets
+            int numBuckets = 5;  // Reduced from 10 for more aggressive culling
+            float bucketSize = maxDistance / float(numBuckets);
+            int bucketIndex = int(distance / bucketSize);
+            
+            // Start culling from bucket 1 (not bucket 0)
+            if (bucketIndex >= 1) {
+                // Much more aggressive culling probability
+                float cullProbability = float(bucketIndex) / float(numBuckets);
+                cullProbability = cullProbability * cullProbability; // Square it for more aggressive culling
+                
+                float hashVal = fract(sin(dot(v0.xz, vec2(12.9898, 78.233))) * 43758.5453);
+                
+                if (hashVal < cullProbability) {
+                    visible = false;
+                }
+            }
         }
     }
     

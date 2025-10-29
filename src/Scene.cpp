@@ -4,6 +4,10 @@
 Scene::Scene(Device* device) : device(device) {
     BufferUtils::CreateBuffer(device, sizeof(Time), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, timeBuffer, timeBufferMemory);
     vkMapMemory(device->GetVkDevice(), timeBufferMemory, 0, sizeof(Time), 0, &mappedData);
+
+    // Initialize with all culling enabled
+    time.cullingFlags = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+
     memcpy(mappedData, &time, sizeof(Time));
 }
 
@@ -12,7 +16,7 @@ const std::vector<Model*>& Scene::GetModels() const {
 }
 
 const std::vector<Blades*>& Scene::GetBlades() const {
-  return blades;
+    return blades;
 }
 
 void Scene::AddModel(Model* model) {
@@ -20,7 +24,7 @@ void Scene::AddModel(Model* model) {
 }
 
 void Scene::AddBlades(Blades* blades) {
-  this->blades.push_back(blades);
+    this->blades.push_back(blades);
 }
 
 void Scene::UpdateTime() {
@@ -28,8 +32,6 @@ void Scene::UpdateTime() {
     duration<float> nextDeltaTime = duration_cast<duration<float>>(currentTime - startTime);
     startTime = currentTime;
 
-    //time.deltaTime = nextDeltaTime.count();
-    //time.totalTime += time.deltaTime;
     time.timeData.x = nextDeltaTime.count();  // deltaTime
     time.timeData.y += time.timeData.x;        // totalTime
 
@@ -46,6 +48,26 @@ glm::vec4 Scene::GetSpherePosition() const {
 
 void Scene::SetSpherePosition(const glm::vec3& pos) {
     time.spherePosition = glm::vec4(pos, time.spherePosition.w);
+    memcpy(mappedData, &time, sizeof(Time));
+}
+
+void Scene::SetOrientationCulling(bool enabled) {
+    time.cullingFlags.x = enabled ? 1.0f : 0.0f;
+    memcpy(mappedData, &time, sizeof(Time));
+}
+
+void Scene::SetFrustumCulling(bool enabled) {
+    time.cullingFlags.y = enabled ? 1.0f : 0.0f;
+    memcpy(mappedData, &time, sizeof(Time));
+}
+
+void Scene::SetDistanceCulling(bool enabled) {
+    time.cullingFlags.z = enabled ? 1.0f : 0.0f;
+    memcpy(mappedData, &time, sizeof(Time));
+}
+
+void Scene::SetAllCulling(bool enabled) {
+    time.cullingFlags = glm::vec4(enabled ? 1.0f : 0.0f);
     memcpy(mappedData, &time, sizeof(Time));
 }
 

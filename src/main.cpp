@@ -8,12 +8,31 @@
 #include <chrono>
 #include <sstream>
 #include <iomanip>
+#include <fstream>
+#include <vector>
+#include <iostream>
 
 Device* device;
 SwapChain* swapChain;
 Renderer* renderer;
 Camera* camera;
 Scene* scene;
+
+// Performance testing
+enum class CullingMode {
+    NONE,
+    ORIENTATION,
+    FRUSTUM,
+    DISTANCE,
+    ALL
+};
+
+struct PerformanceData {
+    CullingMode mode;
+    std::vector<double> frameTimes;
+    double averageFrameTime;
+    double fps;
+};
 
 namespace {
     void resizeCallback(GLFWwindow* window, int width, int height) {
@@ -69,10 +88,81 @@ namespace {
             previousY = yPosition;
         }
     }
+
+    // Performance testing state
+    bool isRecording = false;
+    int currentTestMode = 0;
+    std::vector<PerformanceData> performanceResults;
+    std::vector<double> currentFrameTimes;
+    int recordingFrames = 0;
+    const int FRAMES_TO_RECORD = 300; // Record 300 frames per test
+
+    void setCullingMode(CullingMode mode) {
+        switch (mode) {
+        case CullingMode::NONE:
+            scene->SetAllCulling(false);
+            break;
+        case CullingMode::ORIENTATION:
+            scene->SetOrientationCulling(true);
+            scene->SetFrustumCulling(false);
+            scene->SetDistanceCulling(false);
+            break;
+        case CullingMode::FRUSTUM:
+            scene->SetOrientationCulling(false);
+            scene->SetFrustumCulling(true);
+            scene->SetDistanceCulling(false);
+            break;
+        case CullingMode::DISTANCE:
+            scene->SetOrientationCulling(false);
+            scene->SetFrustumCulling(false);
+            scene->SetDistanceCulling(true);
+            break;
+        case CullingMode::ALL:
+            scene->SetAllCulling(true);
+            break;
+        }
+    }
+
+    std::string getModeString(CullingMode mode) {
+        switch (mode) {
+        case CullingMode::NONE: return "None";
+        case CullingMode::ORIENTATION: return "Orientation";
+        case CullingMode::FRUSTUM: return "Frustum";
+        case CullingMode::DISTANCE: return "Distance";
+        case CullingMode::ALL: return "All";
+        default: return "Unknown";
+        }
+    }
+
+    void savePerformanceResults() {
+        std::ofstream file("performance_results.csv");
+        file << "Culling Mode,Average Frame Time (ms),FPS\n";
+
+        for (const auto& data : performanceResults) {
+            file << getModeString(data.mode) << ","
+                << data.averageFrameTime << ","
+                << data.fps << "\n";
+        }
+
+        file.close();
+        std::cout << "Performance results saved to performance_results.csv" << std::endl;
+
+        // Print to console too
+        std::cout << "\n=== PERFORMANCE RESULTS ===" << std::endl;
+        std::cout << std::setw(15) << "Mode" << std::setw(20) << "Avg Frame Time (ms)" << std::setw(10) << "FPS" << std::endl;
+        std::cout << std::string(45, '-') << std::endl;
+        for (const auto& data : performanceResults) {
+            std::cout << std::setw(15) << getModeString(data.mode)
+                << std::setw(20) << std::fixed << std::setprecision(4) << data.averageFrameTime
+                << std::setw(10) << std::fixed << std::setprecision(1) << data.fps << std::endl;
+        }
+        std::cout << "==========================\n" << std::endl;
+    }
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+    if (action == GLFW_PRESS) {
+        // Sphere movement
         float speed = 0.5f;
         glm::vec3 currentPos = glm::vec3(scene->GetSpherePosition());
 
@@ -84,6 +174,45 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
         if (key == GLFW_KEY_E) currentPos.y += speed;
 
         scene->SetSpherePosition(currentPos);
+
+        // Performance testing controls
+        if (key == GLFW_KEY_P && !isRecording) {
+            // Start performance test
+            std::cout << "\n=== STARTING PERFORMANCE TEST ===" << std::endl;
+            std::cout << "Testing 5 culling modes with " << FRAMES_TO_RECORD << " frames each..." << std::endl;
+            std::cout << "Please don't move the camera during testing!\n" << std::endl;
+
+            isRecording = true;
+            currentTestMode = 0;
+            performanceResults.clear();
+            currentFrameTimes.clear();
+            recordingFrames = 0;
+
+            setCullingMode(CullingMode::NONE);
+            std::cout << "Testing: None" << std::endl;
+        }
+
+        // Manual culling toggles (for manual testing)
+        if (key == GLFW_KEY_1) {
+            scene->SetAllCulling(false);
+            std::cout << "Culling: NONE" << std::endl;
+        }
+        if (key == GLFW_KEY_2) {
+            setCullingMode(CullingMode::ORIENTATION);
+            std::cout << "Culling: ORIENTATION only" << std::endl;
+        }
+        if (key == GLFW_KEY_3) {
+            setCullingMode(CullingMode::FRUSTUM);
+            std::cout << "Culling: FRUSTUM only" << std::endl;
+        }
+        if (key == GLFW_KEY_4) {
+            setCullingMode(CullingMode::DISTANCE);
+            std::cout << "Culling: DISTANCE only" << std::endl;
+        }
+        if (key == GLFW_KEY_5) {
+            scene->SetAllCulling(true);
+            std::cout << "Culling: ALL" << std::endl;
+        }
     }
 }
 
@@ -171,8 +300,14 @@ int main() {
     auto lastTime = high_resolution_clock::now();
     int frameCount = 0;
     double fps = 0.0;
-    double updateInterval = 0.5; // Update FPS display every 0.5 seconds
+    double updateInterval = 0.5;
     double timeSinceLastUpdate = 0.0;
+
+    std::cout << "\n=== CONTROLS ===" << std::endl;
+    std::cout << "Press P: Start automatic performance test" << std::endl;
+    std::cout << "Press 1-5: Manual culling mode switch (1=None, 2=Orientation, 3=Frustum, 4=Distance, 5=All)" << std::endl;
+    std::cout << "WASDQE: Move sphere" << std::endl;
+    std::cout << "================\n" << std::endl;
 
     while (!ShouldQuit()) {
         glfwPollEvents();
@@ -182,6 +317,54 @@ int main() {
         duration<double> deltaTime = duration_cast<duration<double>>(currentTime - lastTime);
         lastTime = currentTime;
 
+        double frameTimeMs = deltaTime.count() * 1000.0;
+
+        // Performance recording
+        if (isRecording) {
+            currentFrameTimes.push_back(frameTimeMs);
+            recordingFrames++;
+
+            if (recordingFrames >= FRAMES_TO_RECORD) {
+                // Calculate average
+                double sum = 0.0;
+                for (double ft : currentFrameTimes) {
+                    sum += ft;
+                }
+                double avgFrameTime = sum / currentFrameTimes.size();
+                double avgFPS = 1000.0 / avgFrameTime;
+
+                // Store results
+                PerformanceData data;
+                data.mode = static_cast<CullingMode>(currentTestMode);
+                data.frameTimes = currentFrameTimes;
+                data.averageFrameTime = avgFrameTime;
+                data.fps = avgFPS;
+                performanceResults.push_back(data);
+
+                std::cout << getModeString(data.mode) << " - Avg: "
+                    << std::fixed << std::setprecision(4) << avgFrameTime
+                    << " ms (" << std::setprecision(1) << avgFPS << " FPS)" << std::endl;
+
+                // Move to next test
+                currentTestMode++;
+                currentFrameTimes.clear();
+                recordingFrames = 0;
+
+                if (currentTestMode < 5) {
+                    setCullingMode(static_cast<CullingMode>(currentTestMode));
+                    std::cout << "Testing: " << getModeString(static_cast<CullingMode>(currentTestMode)) << std::endl;
+                }
+                else {
+                    // Done with all tests
+                    isRecording = false;
+                    savePerformanceResults();
+
+                    // Reset to all culling
+                    scene->SetAllCulling(true);
+                }
+            }
+        }
+
         frameCount++;
         timeSinceLastUpdate += deltaTime.count();
 
@@ -189,12 +372,14 @@ int main() {
         if (timeSinceLastUpdate >= updateInterval) {
             fps = frameCount / timeSinceLastUpdate;
 
-            // Update window title with FPS
             std::ostringstream titleStream;
             titleStream << "Vulkan Grass Rendering - FPS: " << std::fixed << std::setprecision(1) << fps;
+            if (isRecording) {
+                titleStream << " [RECORDING " << getModeString(static_cast<CullingMode>(currentTestMode))
+                    << " " << recordingFrames << "/" << FRAMES_TO_RECORD << "]";
+            }
             glfwSetWindowTitle(GetGLFWWindow(), titleStream.str().c_str());
 
-            // Reset counters
             frameCount = 0;
             timeSinceLastUpdate = 0.0;
         }
