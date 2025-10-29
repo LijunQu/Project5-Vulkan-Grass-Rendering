@@ -31,24 +31,24 @@ I further implemented **interactive grass control (WASD)** and **LOD visualizati
 Implemented all three culling strategies for performance optimization:
 - **Orientation Culling:** Removes blades perpendicular to the view direction.  
 
-![](img/OrientationCulling.gif)
+![](img/OrientationCulling2.gif)
 
 - **Frustum Culling:** Skips blades outside of the view frustum.  
 
-![](img/FrustunCulling.gif)
+![](img/FrustumCulling2.gif)
 
 - **Distance Culling:** Reduces rendering load for distant blades. 
 
-![](img/DistanceCulling.gif) 
+![](img/DistanceCulling2.gif) 
 
 - **All:** Combines all three for maximal efficiency.
 
 ### LOD (Level of Detail)
 - Tessellation level dynamically adapts to camera distance.
 - Visualized LOD levels via fragment shader color coding:
-    Where high detailed grass is in green, low detailed grass is in yellow.
+    Where high detailed grass is in green, medium detailed grass is in yellow, and low detailed grass is in red.
     
-![](img/ColorfulGrass.gif)
+![](img/ColorfulGrass2.gif)
 
 ### Interactive Grass
 - Added a **movable sphere** controlled via `WASDQE`.
