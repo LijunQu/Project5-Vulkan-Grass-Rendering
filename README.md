@@ -7,7 +7,7 @@ Vulkan Grass Rendering
   * [LinkedIn](https://www.linkedin.com/in/lijun-qu-398375251/), [personal website](www.lijunqu.com), etc.
 * Tested on: Windows 11, i7-14700HX (2.10 GHz) 32GB, Nvidia GeForce RTX 4060 Laptop
 
-![](img/Result.gif)
+![](img/Result2.gif)
 
 ---
 
@@ -55,7 +55,7 @@ Implemented all three culling strategies for performance optimization:
 - Sphere interacts with nearby blades, bending and displacing them in real time.
 - Implemented through compute shader updates each frame.
 
-![](img/InteractiveGrass.gif)
+![](img/InteractiveGrass2.gif)
 
 
 ## Runtime and Performance Analysis
