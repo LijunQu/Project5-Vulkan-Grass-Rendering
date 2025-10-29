@@ -41,6 +41,7 @@ Implemented all three culling strategies for performance optimization:
 - Tessellation level dynamically adapts to camera distance.
 - Visualized LOD levels via fragment shader color coding:
     Where high detailed grass is in green, low detailed grass is in yellow.
+    
 ![](img/ColorfulGrass.gif)
 
 ### Interactive Grass
