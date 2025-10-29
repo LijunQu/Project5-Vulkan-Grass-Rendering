@@ -30,11 +30,17 @@ I further implemented **interactive grass control (WASD)** and **LOD visualizati
 ### Culling Techniques
 Implemented all three culling strategies for performance optimization:
 - **Orientation Culling:** Removes blades perpendicular to the view direction.  
+
 ![](img/OrientationCulling.gif)
+
 - **Frustum Culling:** Skips blades outside of the view frustum.  
+
 ![](img/FrustunCulling.gif)
+
 - **Distance Culling:** Reduces rendering load for distant blades. 
+
 ![](img/DistanceCulling.gif) 
+
 - **All:** Combines all three for maximal efficiency.
 
 ### LOD (Level of Detail)
@@ -48,12 +54,14 @@ Implemented all three culling strategies for performance optimization:
 - Added a **movable sphere** controlled via `WASDQE`.
 - Sphere interacts with nearby blades, bending and displacing them in real time.
 - Implemented through compute shader updates each frame.
+
 ![](img/InteractiveGrass.gif)
 
 
 ## Runtime and Performance Analysis
 
 ### Grass Count Scaling
+
 ![](img/output.png)
 
 The graph above (**Grass Count Performance**) shows how frame time scales as the total number of grass blades increases (from 2¹⁰ to 2¹⁸).
