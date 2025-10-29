@@ -13,11 +13,13 @@ layout(location = 0) in vec4 in_v0[];
 layout(location = 1) in vec4 in_v1[];
 layout(location = 2) in vec4 in_v2[];
 layout(location = 3) in vec4 in_up[];
+layout(location = 4) in float in_tessLevel[];
 
 // Output to fragment shader
 layout(location = 0) out vec3 out_normal;
 layout(location = 1) out vec3 out_worldPos;
 layout(location = 2) out vec2 out_uv;
+layout(location = 3) out float out_tessLevel;
 
 out gl_PerVertex {
     vec4 gl_Position;
@@ -73,6 +75,7 @@ void main() {
     out_normal = normal;
     out_worldPos = position;
     out_uv = vec2(u, v);
+    out_tessLevel = in_tessLevel[0];
     
     // Transform to clip space
     gl_Position = camera.proj * camera.view * vec4(position, 1.0);

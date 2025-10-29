@@ -5,6 +5,9 @@
 #include "Camera.h"
 #include "Scene.h"
 #include "Image.h"
+#include <chrono>
+#include <sstream>
+#include <iomanip>
 
 Device* device;
 SwapChain* swapChain;
@@ -35,7 +38,8 @@ namespace {
             else if (action == GLFW_RELEASE) {
                 leftMouseDown = false;
             }
-        } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+        }
+        else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
             if (action == GLFW_PRESS) {
                 rightMouseDown = true;
                 glfwGetCursorPos(window, &previousX, &previousY);
@@ -56,7 +60,8 @@ namespace {
 
             previousX = xPosition;
             previousY = yPosition;
-        } else if (rightMouseDown) {
+        }
+        else if (rightMouseDown) {
             double deltaZ = static_cast<float>((previousY - yPosition) * 0.05);
 
             camera->UpdateOrbit(0.0f, 0.0f, deltaZ);
@@ -79,7 +84,6 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
         if (key == GLFW_KEY_E) currentPos.y += speed;
 
         scene->SetSpherePosition(currentPos);
-        //printf("Sphere at: %.2f, %.2f, %.2f\n", currentPos.x, currentPos.y, currentPos.z);
     }
 }
 
@@ -146,7 +150,7 @@ int main() {
         { 0, 1, 2, 2, 3, 0 }
     );
     plane->SetTexture(grassImage);
-    
+
     Blades* blades = new Blades(device, transferCommandPool, planeDim);
 
     vkDestroyCommandPool(device->GetVkDevice(), transferCommandPool, nullptr);
@@ -162,8 +166,39 @@ int main() {
     glfwSetCursorPosCallback(GetGLFWWindow(), mouseMoveCallback);
     glfwSetKeyCallback(GetGLFWWindow(), keyCallback);
 
+    // FPS tracking variables
+    using namespace std::chrono;
+    auto lastTime = high_resolution_clock::now();
+    int frameCount = 0;
+    double fps = 0.0;
+    double updateInterval = 0.5; // Update FPS display every 0.5 seconds
+    double timeSinceLastUpdate = 0.0;
+
     while (!ShouldQuit()) {
         glfwPollEvents();
+
+        // Calculate delta time and FPS
+        auto currentTime = high_resolution_clock::now();
+        duration<double> deltaTime = duration_cast<duration<double>>(currentTime - lastTime);
+        lastTime = currentTime;
+
+        frameCount++;
+        timeSinceLastUpdate += deltaTime.count();
+
+        // Update FPS display
+        if (timeSinceLastUpdate >= updateInterval) {
+            fps = frameCount / timeSinceLastUpdate;
+
+            // Update window title with FPS
+            std::ostringstream titleStream;
+            titleStream << "Vulkan Grass Rendering - FPS: " << std::fixed << std::setprecision(1) << fps;
+            glfwSetWindowTitle(GetGLFWWindow(), titleStream.str().c_str());
+
+            // Reset counters
+            frameCount = 0;
+            timeSinceLastUpdate = 0.0;
+        }
+
         scene->UpdateTime();
         renderer->Frame();
     }
